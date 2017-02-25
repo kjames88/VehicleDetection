@@ -5,15 +5,16 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 from skimage.feature import hog
 from sklearn.svm import LinearSVC
+from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import normalize
 #from sklearn.cross_validation import train_test_split
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from scipy.ndimage.measurements import label
+# Import everything needed to edit/save/watch video clips
+from moviepy.editor import VideoFileClip
 
-svc = LinearSVC()
-X_scaler = StandardScaler()
-hog_orientations = 16
 
 def color_hist(img):
     # as in lecture; [0] output is bin counts
@@ -40,12 +41,12 @@ def train():
     images = glob.glob('vehicles/GTI_Right/*.png')
     for image in images:
         cars.append(image)
-    print(len(cars))
+    print('cars samples', len(cars))
 
     images = glob.glob('non-vehicles/GTI/*.png')
     for image in images:
         not_cars.append(image)
-    print(len(not_cars))
+    print('not car samples', len(not_cars))
 
     # get hog features and scale them, following lecture code example
     car_features = []
@@ -54,7 +55,7 @@ def train():
         #img = cv2.cvtColor(mpimg.imread(image), cv2.COLOR_RGB2HLS)
         img = mpimg.imread(image)
         img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        img_norm = normalize(img[:,:,0])
+        #img_norm = normalize(img[:,:,0])
         features = []
         if False:
             hog_features = []
@@ -72,7 +73,7 @@ def train():
         #img = cv2.cvtColor(mpimg.imread(image), cv2.COLOR_RGB2HLS)
         img = mpimg.imread(image)
         img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        img_norm = normalize(img[:,:,0])
+        #img_norm = normalize(img[:,:,0])
         features = []
         if False:
             hog_features = []
@@ -87,12 +88,9 @@ def train():
         features.append(color_hist(img))
         not_car_features.append(np.concatenate(features))
     X = np.vstack((car_features, not_car_features)).astype(np.float64)
-    print('X shape {}'.format(X.shape))
     X_scaler.fit(X)
     scaled_X = X_scaler.transform(X)
     y = np.hstack((np.ones(len(car_features)), np.zeros(len(not_car_features))))
-    print(scaled_X.shape)
-    print(y.shape)
     X_train, X_test, y_train, y_test = train_test_split(scaled_X, y, test_size=0.2)
     svc.fit(X_train, y_train)
     pred = svc.predict(X_test)
@@ -113,7 +111,7 @@ def sliding_window(img, y_range=[None, None], window_size=(64,64), overlap=0.5):
         y_end = img.shape[0]
     else:
         y_end = y_range[1]
-    print('x range 0 - {}, y range {} - {}'.format(x_dim, y_start, y_end))
+    #print('x range 0 - {}, y range {} - {}'.format(x_dim, y_start, y_end))
     step_y = np.int(window_size[1] * (1.0 - overlap))
     hold_y = np.int(window_size[1] * overlap)  # overlap section of window to hold back in computing steps
     y_steps = np.int((y_end - y_start - hold_y) / step_y)
@@ -161,8 +159,7 @@ def classify(hog_features, search_windows, scale=(64,64)):
 def my_hog(img, search_windows):
     hits = []
     img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    img_norm = normalize(img[:,:,0])
-    print('range is {} to {}'.format(np.min(img_norm), np.max(img_norm)))
+    #img_norm = normalize(img[:,:,0])
     #img_hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
     for window in search_windows:
         w = cv2.resize(img_gray[window[0][1]:window[1][1],window[0][0]:window[1][0]], (64,64))
@@ -209,42 +206,94 @@ def search_frame(img):
     #scaled_img = resize_window(img[400:432, :], (16,16))
     #hog_features = whole_hog(scaled_img)
     #hot_windows = classify(hog_features, search_windows, (16,16))
-    for w in hot_windows:
-        cv2.rectangle(img, w[0], w[1], (0,0,255), 2)
 
     # medium scale
     y = [400, 528]
     s = (64,64)
     search_windows = sliding_window(img, y_range=y, window_size=(64,64), overlap=0.75)
-    hot_windows = my_hog(img, search_windows)
+    hot_windows.extend((my_hog(img, search_windows)))
     #scaled_img = resize_window(img[y[0]:y[1], :], (64,64))
     #hog_features = whole_hog(scaled_img)
     #hot_windows = classify(hog_features, search_windows, (64,64))
-    for w in hot_windows:
-        cv2.rectangle(img, w[0], w[1], (0,0,255), 2)
 
     # large scale
     #search_windows = sliding_window(img, y_range=[400, 596], window_size=(128,128), overlap=0.75)
     y = [400, 576]
     s = (128,128)
     search_windows = sliding_window(img, y_range=y, window_size=s, overlap=0.75)
-    hot_windows = my_hog(img, search_windows)
+    hot_windows.extend(my_hog(img, search_windows))
     #scaled_img = resize_window(img[y[0]:y[1], :], s)
     #hog_features = whole_hog(scaled_img)
     #hot_windows = classify(hog_features, search_windows, s)
-    for w in hot_windows:
-        cv2.rectangle(img, w[0], w[1], (0,0,255), 2)
     
     y = [500, 675]
     search_windows = sliding_window(img, y_range=y, window_size=(256,256), overlap=0.75)
-    hot_windows = my_hog(img, search_windows)
-    for w in hot_windows:
-        cv2.rectangle(img, w[0], w[1], (0,0,255), 2)
+    hot_windows.extend(my_hog(img, search_windows))
+    #for w in hot_windows:
+    #    cv2.rectangle(img, w[0], w[1], (0,0,255), 2)
+#    plt.imshow(img)
+#    plt.show()
 
-    plt.imshow(img)
-    plt.show()
+    return hot_windows
 
 
+
+# create a thresholded heat map to remove false positives and duplicates
+#    - from lecture
+def heat_map(img, windows):
+    heat = np.zeros_like(img)
+    for w in windows:
+        heat[w[0][1]:w[1][1], w[0][0]:w[1][0]] += 1
+    heat[heat < 2] = 0  # threshold to remove areas with too few hits
+    labels = label(heat)
+    print(labels[1], ' cars found')
+    
+    return labels
+
+# function copied from lecture (35)
+def draw_labeled_bboxes(img, labels):
+    # Iterate through all detected cars
+    for car_number in range(1, labels[1]+1):
+        # Find pixels with each car_number label value
+        nonzero = (labels[0] == car_number).nonzero()
+        # Identify x and y values of those pixels
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
+        # Define a bounding box based on min/max x and y
+        bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+        # Draw the box on the image
+        cv2.rectangle(img, bbox[0], bbox[1], (0,0,255), 6)
+    # Return the image
+    return img
+
+
+def process_image(img):
+    hot_windows = search_frame(img)
+    labels = heat_map(img, hot_windows)
+    draw_labeled_bboxes(img, labels)
+    return img
+
+
+svc = LinearSVC(class_weight='balanced')
+#svc = SVC(kernel='poly', degree=2, class_weight='balanced')
+X_scaler = StandardScaler()
+hog_orientations = 24
 train()
-search_frame(img)
+
+def main():
+    project_output = 'project_post.mp4'
+    clip1 = VideoFileClip('project_video.mp4').subclip(4,12)
+    project_clip = clip1.fl_image(process_image)  # color images required
+    project_clip.write_videofile(project_output, audio=False)
+
+
+
+if __name__ == "__main__":
+    # execute only if run as a script
+    main()
+
+
+
+#plt.imshow(img)
+#plt.show()
 
