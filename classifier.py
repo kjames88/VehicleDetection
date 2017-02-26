@@ -21,17 +21,16 @@ def color_hist(img):
     # may be more useful to histogram only S
 
     # as in lecture; [0] output is bin counts
-    hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
-    #color0_hist = np.histogram(hls[:,:,0], bins=32, range=(0,256))
-    #color1_hist = np.histogram(hls[:,:,1], bins=32, range=(0,256))
-    color2_hist = np.histogram(hls[:,:,2], bins=32, range=(0,256))
-    #features = np.concatenate((color0_hist[0], color1_hist[0], color2_hist[0]))
+    color0_hist = np.histogram(img[:,:,0], bins=32)
+    color1_hist = np.histogram(img[:,:,1], bins=32)
+    color2_hist = np.histogram(img[:,:,2], bins=32)
+    features = np.concatenate((color0_hist[0], color1_hist[0], color2_hist[0]))
     
     # size of this feature is small compared to HOG and spatial
     #   to be useful it needs to be increased in weight
     features = color2_hist[0]
-    for copies in range(0,19):
-        features = np.concatenate((features, color2_hist[0]))
+    #for copies in range(0,29):
+    #    features = np.concatenate((features, color2_hist[0]))
     return features
 
 
@@ -44,25 +43,25 @@ def spatial(img):
 
 
 def get_features(img):
-    img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    #img_norm = normalize(img[:,:,0])
+    ycrcb = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
     features = []
     if hog_all_channels:
         hog_features = []
-        for channel in range(img.shape[2]):
-            hog_features.append(hog(img[:,:,channel], orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
+        for channel in range(ycrcb.shape[2]):
+            hog_features.append(hog(ycrcb[:,:,channel], orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
                                transform_sqrt=True, visualise=False, feature_vector=True))
         features.append(np.ravel(hog_features))
     elif hog_gray:
+        img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         hog_features = hog(img_gray, orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
                            transform_sqrt=True, visualise=False, feature_vector=True)
         features.append(hog_features)
     else:
-        hog_features = hog(img[:,:,0], orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
+        hog_features = hog(ycrcb[:,:,hog_channel], orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
                            transform_sqrt=True, visualise=False, feature_vector=True)
         features.append(hog_features)
-    features.append(color_hist(img))
-    features.append(spatial(img))
+    #features.append(color_hist(ycrcb))
+    features.append(spatial(ycrcb))
     return np.concatenate(features)
 
 
@@ -82,9 +81,15 @@ def train():
     images = glob.glob('vehicles/GTI_Right/*.png')
     for image in images:
         cars.append(image)
+    images = glob.glob('vehicles/KITTI_extracted/*.png')
+    for image in images:
+        cars.append(image)
     print('cars samples', len(cars))
 
     images = glob.glob('non-vehicles/GTI/*.png')
+    for image in images:
+        not_cars.append(image)
+    images = glob.glob('non-vehicles/Extras/*.png')
     for image in images:
         not_cars.append(image)
     print('not car samples', len(not_cars))
@@ -95,53 +100,23 @@ def train():
     Mright = np.float32([[1,0,8], [0,1,8]])
     Mleft = np.float32([[1,0,-8], [0,1,-8]])
     for image in cars:
-        #img = cv2.cvtColor(mpimg.imread(image), cv2.COLOR_RGB2HLS)
         img = mpimg.imread(image)
         rows,cols,channels = img.shape
-        
-        img_shift_right = cv2.warpAffine(img, Mright, (cols,rows))
-        img_shift_left = cv2.warpAffine(img, Mleft, (cols,rows))
         car_features.append(get_features(img))
+        #img_shift_right = cv2.warpAffine(img, Mright, (cols,rows))
+        #img_shift_left = cv2.warpAffine(img, Mleft, (cols,rows))
         #car_features.append(get_features(img_shift_right))
         #car_features.append(get_features(img_shift_left))
 
-#        img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-#        #img_norm = normalize(img[:,:,0])
-#        features = []
-#        if False:
-#            hog_features = []
-#            for channel in range(img.shape[2]):
-#                hog_features.append(hog(img[:,:,channel], orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
-#                                   transform_sqrt=True, visualise=False, feature_vector=True))
-#            features.append(np.ravel(hog_features))
-#        else:
-#            hog_features = hog(img_gray, orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
-#                               transform_sqrt=True, visualise=False, feature_vector=True)
-#            features.append(hog_features)
-#        features.append(color_hist(img))
-#        features.append(spatial(img))
-#        car_features.append(np.concatenate(features))
     for image in not_cars:
-        #img = cv2.cvtColor(mpimg.imread(image), cv2.COLOR_RGB2HLS)
         img = mpimg.imread(image)
+        rows,cols,channels = img.shape
         not_car_features.append(get_features(img))
+        #img_shift_right = cv2.warpAffine(img, Mright, (cols,rows))
+        #img_shift_left = cv2.warpAffine(img, Mleft, (cols,rows))
+        #not_car_features.append(get_features(img_shift_right))
+        #not_car_features.append(get_features(img_shift_left))
 
-#        img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-#        #img_norm = normalize(img[:,:,0])
-#        features = []
-#        if False:
-#            hog_features = []
-#            for channel in range(img.shape[2]):
-#                hog_features.append(hog(img[:,:,channel], orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
-#                                   transform_sqrt=True, visualise=False, feature_vector=True))
-#            features.append(np.ravel(hog_features))
-#        else:
-#            hog_features = hog(img_gray, orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
-#                               transform_sqrt=True, visualise=False, feature_vector=True)
-#            features.append(hog_features)
-#        features.append(color_hist(img))
-#        features.append(spatial(img))
-#        not_car_features.append(np.concatenate(features))
     X = np.vstack((car_features, not_car_features)).astype(np.float64)
     X_scaler.fit(X)
     scaled_X = X_scaler.transform(X)
@@ -215,19 +190,10 @@ def classify(img, hog_features, search_windows, start=(0,0), scale=(64,64)):
 
 def my_hog(img, search_windows):
     hits = []
-    #img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    #img_norm = normalize(img[:,:,0])
-    #img_hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
     for window in search_windows:
         w = cv2.resize(img[window[0][1]:window[1][1],window[0][0]:window[1][0]], (64,64))
+        w = np.float32(w/255)  # video image has range 0-255 vs 0-1 for png training images
         features = get_features(w)
-        #w_rgb = img[window[0][1]:window[1][1],window[0][0]:window[1][0]]
-        #hog_features = hog(w_gray,
-        #                   orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
-        #                   transform_sqrt=True, visualise=False, feature_vector=False)
-        #color_f = color_hist(w_rgb)
-        #spatial_f = spatial(w_rgb)
-        #features = np.concatenate((np.ravel(hog_features), color_f, spatial_f))
         scaled_X = X_scaler.transform(np.ravel(features).reshape(1,-1))
         pred = svc.predict(scaled_X)
         if pred == 1:
@@ -238,37 +204,26 @@ def my_hog(img, search_windows):
 
 # compute hog for the frame then section it with sliding window for classification
 def whole_hog(img):
-    img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    if False:
+    ycrcb = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
+    if hog_all_channels:
         features = []
-        for channel in range(img.shape[2]):
-            hog_features = hog(img[:,:,channel], orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
+        for channel in range(ycrcb.shape[2]):
+            hog_features = hog(ycrcb[:,:,channel], orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
                                transform_sqrt=True, visualise=False, feature_vector=False)
             features.append(hog_features)
         return features
     else:
-        hog_features = hog(img_gray, orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
+        hog_features = hog(ycrcb, orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
                            transform_sqrt=True, visualise=False, feature_vector=False)
         return hog_features
 
 
-img = mpimg.imread('test_images/test1.jpg')
 def search_frame(img):
     # start at middle of frame vertically and use an increasing window size approaching the bottom of frame
     search_windows = []
     hot_windows = []
 
     # small scale
-    #   rescale a strip of the frame to 64x64 equivalent block size, get hog features, and subsample
-    #y = [400, 496]
-    #s = (16,16)
-    #search_windows = sliding_window(img, y_range=y, window_size=s, overlap=0.5)
-    #hot_windows = my_hog(img, search_windows)
-    #scaled_img = resize_window(img[y[0]:y[1], :], s)
-    #hog_features = whole_hog(scaled_img)
-    #hot_windows = classify(img, hog_features, search_windows, scale=s, start=(0,y[0]))
-
-    # medium scale
     y = [400, 528]
     s = (64,64)
     search_windows = sliding_window(img, y_range=y, window_size=s, overlap=0.75)
@@ -277,24 +232,26 @@ def search_frame(img):
     #hog_features = whole_hog(scaled_img)
     #hot_windows.extend(classify(img, hog_features, search_windows, scale=s, start=(0,y[0])))
 
-    # large scale
-    #search_windows = sliding_window(img, y_range=[400, 596], window_size=(128,128), overlap=0.75)
-    y = [400, 576]
+    y = [400, 560]
+    s = (96,96)
+    search_windows = sliding_window(img, y_range=y, window_size=s, overlap=0.75)
+    hot_windows.extend(my_hog(img, search_windows))
+
+    # medium scale
+    y = [500, 656]
     s = (128,128)
     search_windows = sliding_window(img, y_range=y, window_size=s, overlap=0.75)
     hot_windows.extend(my_hog(img, search_windows))
     #scaled_img = resize_window(img[y[0]:y[1], :], s)
     #hog_features = whole_hog(scaled_img)
     #hot_windows.extend(classify(img, hog_features, search_windows, scale=s, start=(0,y[0])))
-    
-    y = [500, 675]
-    s = (256,256)
-    search_windows = sliding_window(img, y_range=y, window_size=s, overlap=0.75)
-    hot_windows.extend(my_hog(img, search_windows))
-    #scaled_img = resize_window(img[y[0]:y[1], :], s)
-    #hog_features = whole_hog(scaled_img)
-    #hot_windows.extend(classify(img, hog_features, search_windows, scale=s, start=(0,y[0])))
 
+    # large scale
+    #y = [400, 656]
+    #s = (192,192)
+    #search_windows = sliding_window(img, y_range=y, window_size=s, overlap=0.75)
+    #hot_windows.extend(my_hog(img, search_windows))
+   
     #for w in hot_windows:
     #    cv2.rectangle(img, w[0], w[1], (0,0,255), 2)
 #    plt.imshow(img)
@@ -307,7 +264,7 @@ def search_frame(img):
 # create a thresholded heat map to remove false positives and duplicates
 #    - from lecture
 def heat_map(img, windows):
-    heat = np.zeros_like(img)
+    heat = np.zeros_like(img[:,:,0])
     for w in windows:
         heat[w[0][1]:w[1][1], w[0][0]:w[1][0]] += 1
     heat[heat < 3] = 0  # threshold to remove areas with too few hits
@@ -316,16 +273,49 @@ def heat_map(img, windows):
     return heat, labels
 
 
-def temporal_filter(heat):
+def temporal_filter(heat, labels):
     global heat_q
     global heat_2q
+
+    # mask heat map using 2 stages of delay
     hot = np.copy(heat)
     if heat_q != None and heat_2q != None:
         hot[((heat_q == 0) | (heat_2q == 0))] = 0
+
+    if True:
+        # keep current heat map iff label contains masked hot pixels
+        hot2 = np.copy(heat)
+        for car_number in range(1, labels[1]+1):
+            s = np.sum((labels[0] == car_number) & (hot > 0))
+            if s == 0:  # no overlap between hot pixels and this label
+                hot2[(labels[0] == car_number)] = 0  # erase this 'car' from heat map
+        hot_labels = label(hot2)
+    else:
+        hot_labels = label(hot)
     if heat_q != None:
         heat_2q = np.copy(heat_q)
     heat_q = np.copy(heat)
-    hot_labels = label(hot)
+    #hot_labels = label(hot)
+    print(hot_labels[1], 'hot cars found')
+    return hot_labels
+
+
+
+def integrate_heat(heat):
+    global heat_q
+    global delay
+    if delay == None:
+        delay = np.zeros_like(heat)
+    else:
+        delay[heat > 0] += 1
+        delay[heat == 0] = 0
+    if heat_q == None:
+        heat_q = np.copy(heat)
+    else:
+        heat_q[delay >= 5] -= 1
+        heat_q[heat > 0] += 1
+    delay += 1
+    hot_labels = label(heat_q)
     print(hot_labels[1], 'hot cars found')
     return hot_labels
 
@@ -349,24 +339,44 @@ def draw_labeled_bboxes(img, labels, color=(0,0,255)):
 
 
 
+def draw_heat(img, heat):
+    heat_color = np.zeros_like(img)
+    color = np.zeros_like(heat)
+    color[heat > 0] = 255
+    heat_color[:,:,2] = color
+    overlay = cv2.addWeighted(img, 1.0, heat_color, 0.5, 0)
+    return overlay
+
+
+
 def process_image(img):
     hot_windows = search_frame(img)
     heat, labels = heat_map(img, hot_windows)
-    hot_labels = temporal_filter(heat)
+    hot_labels = integrate_heat(heat)
+
+
+    # DETAILED SEARCH
+
+
     #draw_labeled_bboxes(img, labels)
     draw_labeled_bboxes(img, hot_labels, (255,0,0))
+    img = draw_heat(img, heat)
     return img
 
 
+#img = mpimg.imread('test_images/test1.jpg')
+#w = np.float32(img / 255)
 
 svc = LinearSVC(class_weight='balanced')
 #svc = SVC(kernel='poly', degree=2, class_weight='balanced')
 X_scaler = StandardScaler()
-hog_all_channels = False
-hog_gray = True
-hog_orientations = 16
+hog_all_channels = True
+hog_gray = False
+hog_channel = 0
+hog_orientations = 9
 heat_q = None
 heat_2q = None
+delay = None
 
 def main():
     train()
