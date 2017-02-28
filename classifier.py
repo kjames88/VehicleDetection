@@ -36,7 +36,7 @@ def spatial(img):
 def get_features_nohog(img):
     ycrcb = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
     features = []
-    features.append(color_hist(ycrcb))
+    #features.append(color_hist(ycrcb))
     features.append(spatial(ycrcb))
     return np.concatenate(features)
 
@@ -60,7 +60,7 @@ def get_features(img):
         hog_features = hog(ycrcb[:,:,hog_channel], orientations=hog_orientations, pixels_per_cell=(8,8), cells_per_block=(2,2),
                            transform_sqrt=True, visualise=False, feature_vector=True)
         features.append(hog_features)
-    features.append(color_hist(ycrcb))
+    #features.append(color_hist(ycrcb))
     features.append(spatial(ycrcb))
     return np.concatenate(features)
 
@@ -300,7 +300,7 @@ def search_frame_v2(img):
             end_x = start_x + 64
             #features.append(hog_features)
             feature_img = ycrcb[start_y:end_y, start_x:end_x]
-            features.append(color_hist(feature_img))
+            #features.append(color_hist(feature_img))
             features.append(spatial(feature_img))
             features = np.concatenate(features)
             scaled_X = X_scaler.transform(features.reshape(1,-1))
@@ -317,7 +317,7 @@ def search_frame(img):
     count = 0
 
     # small scale
-    y = [400, 528]
+    y = [384, 512]
     s = (64,64)
     search_windows = sliding_window(img, y_range=y, window_size=s, step=16)
     count += len(search_windows)
@@ -326,7 +326,7 @@ def search_frame(img):
     hog_features = whole_hog(scaled_img)
     hot_windows.extend(classify(img, hog_features, search_windows, scale=1.0))
 
-    y = [400, 560]
+    y = [400, 600]
     s = (96,96)
     search_windows = sliding_window(img, y_range=y, window_size=s, step=16)
     count += len(search_windows)
@@ -362,33 +362,6 @@ def heat_map(img, windows):
     return heat, labels
 
 
-#def temporal_filter(heat, labels):
-#    global heat_q
-#    global heat_2q
-#
-#    # mask heat map using 2 stages of delay
-#    hot = np.copy(heat)
-#    if heat_q != None and heat_2q != None:
-#        hot[((heat_q == 0) | (heat_2q == 0))] = 0
-#
-#    if True:
-#        # keep current heat map iff label contains masked hot pixels
-#        hot2 = np.copy(heat)
-#        for car_number in range(1, labels[1]+1):
-#            s = np.sum((labels[0] == car_number) & (hot > 0))
-#            if s == 0:  # no overlap between hot pixels and this label
-#                hot2[(labels[0] == car_number)] = 0  # erase this 'car' from heat map
-#        hot_labels = label(hot2)
-#    else:
-#        hot_labels = label(hot)
-#    if heat_q != None:
-#        heat_2q = np.copy(heat_q)
-#    heat_q = np.copy(heat)
-#    #hot_labels = label(hot)
-#    print(hot_labels[1], 'hot cars found')
-#    return hot_labels
-
-
 
 def integrate_heat(heat):
     global heat_q
@@ -401,9 +374,13 @@ def integrate_heat(heat):
     if heat_q == None:
         heat_q = np.copy(heat)
     else:
-        heat_q[(heat_q > 0) & (delay >= 5)] -= 1
+        #heat_q[(heat_q > 0) & (delay >= 5)] -= 1
+        heat_q[delay >= 5] = 0  # hard stop after 5 frames absent
         heat_q[heat > 0] += 1
-    hot_labels = label(heat_q)
+        heat_q[(heat_q > 0) & (heat == 0)] -= 1
+    heat_filt = np.copy(heat_q)
+    heat_filt[heat_filt < 2] = 0  # require 2 successful hits to enable
+    hot_labels = label(heat_filt)
     print(hot_labels[1], 'hot cars found')
     return hot_labels
 
@@ -450,16 +427,15 @@ def identify_cars(img, labels):
 
         pos = (np.min(nonzeroy), np.min(nonzerox))  # (y, x)
         size = (np.max(nonzeroy) - np.min(nonzeroy), np.max(nonzerox) - np.min(nonzerox))
-        print('car {} at y={} x={} size {}x{}'.format(car_number, pos[0], pos[1], size[0], size[1]))
+        #print('car {} at y={} x={} size {}x{}'.format(car_number, pos[0], pos[1], size[0], size[1]))
         #if size[0] > 64 or size[1] > 64:
         #    if size[0] >= 96 or size[1] >= 96:
         #        search_size = (128, 128)
         #    else:
         #        search_size = (96,96)
         #else:
-        #    search_size = (64,64)
-        search_size = (32,32)
-        windows = sliding_window(img, (pos[0]-32, pos[0]+size[0]+32), (pos[1]-32, pos[1]+size[1]+32), search_size, step=16)
+        search_size = (64,64)
+        windows = sliding_window(img, (pos[0]-16, pos[0]+size[0]+16), (pos[1]-16, pos[1]+size[1]+16), search_size, step=8)
         scaled_img = np.float32(img/255)
         for w in windows:
             pred = get_prediction(scaled_img, w)
@@ -473,8 +449,9 @@ def process_image(img):
     hot_windows = search_frame(img)
     heat, labels = heat_map(img, hot_windows)
     hot_labels = integrate_heat(heat)
-    draw_labeled_bboxes(img, hot_labels)
-    img = draw_heat(img, heat)
+    #draw_labeled_bboxes(img, hot_labels)
+    if show_heat:
+        img = draw_heat(img, heat)
     heat, hot_labels = identify_cars(img, hot_labels)  # DETAILED SEARCH
     draw_labeled_bboxes(img, hot_labels, (255,0,0))
     return img
@@ -487,9 +464,9 @@ hog_all_channels = True
 hog_gray = False
 hog_channel = 0
 hog_orientations = 9
-heat_q = None
-heat_2q = None
+show_heat = False
 delay = None
+heat_q = None
 
 #img = mpimg.imread('test_images/test1.jpg')
 #search_frame_v2(img)
@@ -497,8 +474,8 @@ delay = None
 def main():
     train()
     project_output = 'project_post.mp4'
-    #clip1 = VideoFileClip('project_video.mp4')
-    clip1 = VideoFileClip('test_video.mp4')
+    clip1 = VideoFileClip('project_video.mp4')
+    #clip1 = VideoFileClip('test_video.mp4')
     project_clip = clip1.fl_image(process_image)  # color images required
     project_clip.write_videofile(project_output, audio=False)
 
